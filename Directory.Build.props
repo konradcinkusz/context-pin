@@ -1,0 +1,15 @@
+<Project>
+
+  <!--
+    Shared build settings for every project in the repo. Individual .csproj files
+    omit these rather than repeating them, so there is one place to change the
+    target framework or nullable posture.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+
+</Project>
