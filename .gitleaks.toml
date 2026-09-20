@@ -18,6 +18,7 @@ title = "context-pin secret scanning"
 # scanner exists to keep true.
 useDefault = true
 
-[allowlist]
-description = "No paths allowlisted yet"
-paths = []
+# No [allowlist] section: gitleaks rejects one with no checks ("[[allowlists]] must
+# contain at least one check for: commits, paths, regexes, or stopwords"), and there
+# is nothing to allowlist yet. Add the section back — with a real check and a comment
+# saying why — the day a false positive needs one.
