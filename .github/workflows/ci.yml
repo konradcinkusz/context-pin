@@ -65,3 +65,35 @@ jobs:
 
       - name: Test
         run: dotnet test tests/ContextPin.Service.Tests/ContextPin.Service.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      # Proves scripts/seed-principles.sh actually works against a real running
+      # instance, not just that its JSON is well-formed. The service binary
+      # already exists from the Build step above (ContextPin.Service is a
+      # ProjectReference of the test project).
+      - name: Seed principles smoke test
+        env:
+          ASPNETCORE_URLS: "http://localhost:5080"
+        run: |
+          set -euo pipefail
+
+          dotnet src/ContextPin.Service/bin/Release/net9.0/ContextPin.Service.dll &
+          SERVICE_PID=$!
+          trap 'kill "${SERVICE_PID}" 2>/dev/null || true' EXIT
+
+          echo "Waiting for the service to become healthy..."
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:5080/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:5080/health >/dev/null
+
+          ADMIN_API_KEY="${AdminApiKey}" CONTEXT_PIN_URL="http://localhost:5080" scripts/seed-principles.sh
+
+          RULE_COUNT="$(curl -sf http://localhost:5080/api/rulesets/1.0.0 | jq '.rules | length')"
+          if [ "${RULE_COUNT}" != "15" ]; then
+            echo "Expected 15 published rules, got ${RULE_COUNT}."
+            exit 1
+          fi
+          echo "Seed smoke test passed: 15 rules published and retrievable."

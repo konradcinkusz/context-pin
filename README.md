@@ -32,8 +32,8 @@ already exists elsewhere in this author's public repositories — see
 |---|---|
 | `ContextPin.Service` — health endpoint, minimal API host | Built |
 | Domain model (rule sets, rules, repo pins, findings) + migrations | Built |
-| Manifest API (`GET /api/repos/{owner}/{repo}/manifest`) with ETag/content-hash versioning | Not yet |
-| Import of a first rule set (ported from `architecture-standards`) | Not yet |
+| Manifest API (`GET /api/repos/{owner}/{repo}/manifest`) with ETag/content-hash versioning | Built |
+| Import of a first rule set (ported from `architecture-standards`) | Built |
 | `scripts/aurelius-sync.sh` + a drift-detection GitHub Action | Not yet |
 | MCP server, hosted governance portal, per-repo billing, self-hosted mode | Out of scope for now — see [Non-goals, for now](#non-goals-for-now) |
 
@@ -46,6 +46,19 @@ dotnet run --project src/ContextPin.Service
 
 Health check: `curl http://localhost:5080/health` — this also confirms the
 database connection and applies any pending migration.
+
+## Seeding the first rule set
+
+```bash
+ADMIN_API_KEY=local-dev-admin-key scripts/seed-principles.sh
+```
+
+Publishes `seed/principles.json` — condensed from `architecture-standards`'
+fifteen architecture principles (P1–P15) — as rule set `1.0.0`, via the
+service's own `POST /api/rulesets`, not a direct database write. Safe to
+re-run: a version that already exists is treated as success. `ADMIN_API_KEY`
+must match the target service's `AdminApiKey` — the local-dev value above
+matches `appsettings.Development.json`.
 
 ## Data
 
