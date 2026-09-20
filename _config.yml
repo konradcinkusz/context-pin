@@ -1,0 +1,11 @@
+# GitHub Pages configuration. There is deliberately no separate landing page:
+# Jekyll uses README.md as the site's index when no index.html/index.md is
+# present, so the Pages site and the repo's README are the same document —
+# nothing to keep in sync, consistent with this repo's own rule that the
+# README is updated in the same PR that makes a claim true.
+theme: jekyll-theme-cayman
+title: context-pin
+description: >-
+  A versioned rules manifest for coding agents: publish a set of standards
+  once, pin each consuming repository to a version and a channel, serve it
+  over HTTP with a content hash, and let CI detect drift.
