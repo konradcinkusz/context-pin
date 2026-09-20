@@ -1,0 +1,24 @@
+# gitleaks configuration — context-pin
+#
+# Runs in two places, deliberately:
+#   • pre-commit hook (scripts/hooks/pre-commit) — catches the mistake before it
+#     becomes history;
+#   • CI job (.github/workflows/secret-scan.yml)  — catches contributors without hooks.
+#
+# This repository is public from its first commit. A pushed secret is disclosed the
+# moment it is pushed, and scrubbing without rotating first is theatre.
+
+title = "context-pin secret scanning"
+
+[extend]
+# The ~170 upstream provider rules (AWS, GitHub, Slack, Stripe, OpenAI, …). This
+# service does hold real secrets at runtime (a database connection string, a JWT or
+# service-token signing key for the manifest API) — those live in environment
+# variables / platform secret stores, never in the tree, which is exactly what this
+# scanner exists to keep true.
+useDefault = true
+
+# No [allowlist] section: gitleaks rejects one with no checks ("[[allowlists]] must
+# contain at least one check for: commits, paths, regexes, or stopwords"), and there
+# is nothing to allowlist yet. Add the section back — with a real check and a comment
+# saying why — the day a false positive needs one.
