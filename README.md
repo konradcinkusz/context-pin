@@ -31,7 +31,7 @@ already exists elsewhere in this author's public repositories — see
 | Piece | Status |
 |---|---|
 | `ContextPin.Service` — health endpoint, minimal API host | Built |
-| Domain model (rule sets, rules, repo pins, findings) + migrations | Not yet |
+| Domain model (rule sets, rules, repo pins, findings) + migrations | Built |
 | Manifest API (`GET /api/repos/{owner}/{repo}/manifest`) with ETag/content-hash versioning | Not yet |
 | Import of a first rule set (ported from `architecture-standards`) | Not yet |
 | `scripts/aurelius-sync.sh` + a drift-detection GitHub Action | Not yet |
@@ -40,10 +40,28 @@ already exists elsewhere in this author's public repositories — see
 ## Running it locally
 
 ```bash
+docker compose up -d          # Postgres, once
 dotnet run --project src/ContextPin.Service
 ```
 
-Health check: `curl http://localhost:5080/health`
+Health check: `curl http://localhost:5080/health` — this also confirms the
+database connection and applies any pending migration.
+
+## Data
+
+One Postgres database, migrated by numbered `.sql` files under
+`src/ContextPin.Service/Migrations/`, applied at startup and tracked in a
+`schema_migrations` table. Not EF Core migrations: generating those needs
+`dotnet ef migrations add`, which needs the SDK's design-time tooling. Plain
+SQL plus a tracking table gives the same guarantee — schema is migrated,
+never assumed into existence — without that dependency.
+
+| Table | Holds |
+|---|---|
+| `rule_sets` | A versioned, content-hashed, immutable bundle of rules |
+| `rules` | One rule within a rule set |
+| `repo_pins` | Which rule set a given `(owner, repo, channel)` resolves to right now |
+| `findings` | Reported violations, append-only |
 
 ## Tests
 

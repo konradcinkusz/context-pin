@@ -16,12 +16,33 @@ concurrency:
 env:
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
+  # Same credentials as docker-compose.yml (local dev) and appsettings.Development.json.
+  # ConnectionStrings__contextpindb is what the service itself reads at startup, via
+  # WebApplicationFactory in tests too. CONTEXTPIN_TEST_CONNECTION_STRING is what test
+  # fixtures that talk to Postgres directly (bypassing the host) read.
+  ConnectionStrings__contextpindb: "Host=localhost;Port=5432;Database=contextpin;Username=contextpin;Password=contextpin"
+  CONTEXTPIN_TEST_CONNECTION_STRING: "Host=localhost;Port=5432;Database=contextpin;Username=contextpin;Password=contextpin"
 
 jobs:
   build-and-test:
     name: Build and test
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: contextpin
+          POSTGRES_USER: contextpin
+          POSTGRES_PASSWORD: contextpin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contextpin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout code
