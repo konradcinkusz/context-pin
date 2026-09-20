@@ -1,0 +1,112 @@
+{
+  "_attribution": "Ported from konradcinkusz/architecture-standards, docs/architecture/00-REFERENCE-ARCHITECTURE.md (\"1. Principles\", P1-P15), as published at commit time. Content below is condensed for use as CI/agent-consumable rules; it is not a verbatim copy of that document's prose, tables, or code samples. See that repository for the full reference architecture, worked examples, and amendment history.",
+  "version": "1.0.0",
+  "status": "released",
+  "rules": [
+    {
+      "ruleId": "P1",
+      "title": "The AppHost is the composition root, and it exists for development",
+      "content": "One Aspire AppHost project declares every resource (databases, caches, containers, projects, frontends) and the edges between them, so `git clone && dotnet run` starts the whole system with one command. Externally-contracted ports (used by third-party configs) are pinned, not left to float. The AppHost is a development composition root and manifest generator — it is not the production topology; production is described by the platform's own configuration (fly.toml, workflow env).",
+      "severity": "warning",
+      "sortOrder": 1
+    },
+    {
+      "ruleId": "P2",
+      "title": "Shared code is a shared kernel, not a shared domain",
+      "content": "Exactly one shared library sits on the hot path, and it holds only cross-cutting plumbing (telemetry, health checks, service discovery, resilience, auth, CORS, OpenAPI, persistence wiring) exposed as extension methods — no base classes, no inheritance chains. No business entities, business rules, pricing, user-facing strings, or seed data go in the kernel; where two services need the same domain data, one owns it and serves it over HTTP, or it lives in a Contracts project. The size ceiling is mechanical (~800 lines), checked in CI with an architecture test asserting the kernel references no entity type. Corollary: every service calls AddServiceDefaults() — opting out of the kernel means opting out of being operable.",
+      "severity": "warning",
+      "sortOrder": 2
+    },
+    {
+      "ruleId": "P3",
+      "title": "Service per bounded context; database per service",
+      "content": "A service owns its schema; no other service opens a connection to it directly. Cross-context reads go over HTTP against a published contract. Physical co-location (e.g. several logical databases on one Postgres instance) is a cost decision and is fine — the logical boundary is what must not be crossed. Bounded contexts are drawn around data cohesion, not around nouns: a component with a shared hot in-memory aggregate can stay a monolith rather than being split and reassembled over a wire.",
+      "severity": "warning",
+      "sortOrder": 3
+    },
+    {
+      "ruleId": "P4",
+      "title": "Persistence is provider-portable and its schema is migrated, never \"ensured\"",
+      "content": "The database provider is a configuration switch, not a compile-time decision, with provider-appropriate retry and connection-string normalization. Every real provider applies schema via versioned migrations (MigrateAsync), run as a hosted service after the app starts so health probes still answer during migration; EnsureCreated is permitted only on the InMemory/test path. This governs an ORM-managed relational schema specifically — a store with no entity model (e.g. raw SQL with idempotent CREATE TABLE IF NOT EXISTS) is outside the rule, not an exception to it. Migrations describe schema; reference/seed data is seeded separately, never embedded via HasData in the model (it makes migration diffs unreviewable).",
+      "severity": "warning",
+      "sortOrder": 4
+    },
+    {
+      "ruleId": "P5",
+      "title": "Configuration through the environment; secrets through the platform",
+      "content": "Configuration is hierarchical keys bound to options classes, delivered as double-underscore-separated environment variables, sourced from user-secrets locally and the platform's secret store (fly secrets, Key Vault, GitHub Environment secrets) in every other environment. No secret is ever a literal in a csproj, a committed appsettings.json, a source comment, or an XML doc comment — enforced by a secret scanner running as a pre-commit hook and a CI job, not by review alone. Exactly one service holds a signing key (asymmetric, published JWKS); every other service validates tokens against it and holds no key material — a shared symmetric secret means verify equals mint, so any holder can forge a token for any user.",
+      "severity": "error",
+      "sortOrder": 5
+    },
+    {
+      "ruleId": "P6",
+      "title": "One container per service, built from a multi-stage Dockerfile",
+      "content": "Every service container follows the same contract: a multi-stage Dockerfile (SDK image to build, matching-major runtime image to run), project files restored before source is copied so a code change doesn't invalidate the restore layer, ASPNETCORE_URLS=http://+:8080 and EXPOSE 8080, and an explicit image source label. The runtime image's major version must equal the target framework's major version — default roll-forward does not cross a major, and a mismatch is a startup failure, not a warning. Node frontends use a three-stage deps -> builder -> runner pattern with Next.js standalone output and a non-root user.",
+      "severity": "warning",
+      "sortOrder": 6
+    },
+    {
+      "ruleId": "P7",
+      "title": "Fly.io is the deployment target, and the topology is cost-shaped",
+      "content": "Each service gets one Fly app and one fly.toml, with non-secret config in [env], a health check against /health, and min_machines_running = 0 by default except on a synchronous in-request call path (either the callee pins a machine, or the caller's timeout covers a cold boot). Stateful services (e.g. Postgres) get no public listener — reached only over Fly's private network — and volumes are declared with an initial size and a PGDATA subdirectory, since initdb needs an empty data directory. Cost is reasoned about explicitly, per service, in the repository.",
+      "severity": "warning",
+      "sortOrder": 7
+    },
+    {
+      "ruleId": "P8",
+      "title": "Optional dependencies degrade; they do not fail startup",
+      "content": "Every external integration (email provider, OAuth, AI backend, blob storage, external analyzers) is registered conditionally on its configuration being present, with a working fallback — a no-op email service, password login without OAuth, a stub response instead of an error. The test is: git clone && run with zero cloud credentials must produce a working system with reduced features, not a crash. Degradation must be visible, not merely correct — a health endpoint (and a startup banner) should report the state of every optional integration, so discovering what's degraded doesn't require reading the config that was never set.",
+      "severity": "warning",
+      "sortOrder": 8
+    },
+    {
+      "ruleId": "P9",
+      "title": "Program.cs is a manifest; wiring lives in extension methods",
+      "content": "Program.cs reads as a list of capabilities, not as configuration code — each block is one call into a ServiceCollectionExtensions method owned by the service. Within a service, responsibility layers cleanly: controllers/endpoints bind, authorize and delegate; orchestrators coordinate a use case across services; pipeline steps or domain services each do one chainable thing; repositories/DbContext do data access. A short Program.cs for a service with several orchestrators and two AI backends is the target shape; a long Program.cs doing the same job inline is the anti-pattern, and it's the harder file to change.",
+      "severity": "warning",
+      "sortOrder": 9
+    },
+    {
+      "ruleId": "P10",
+      "title": "Extensibility through interface + registration, not inheritance",
+      "content": "A new algorithm, provider or step is a class implementing an interface plus one DI registration line — no base class to derive from, no framework to satisfy. A shared 'Core' library exports interfaces and extension methods, not things you inherit from. The interface is the right seam for a new algorithm; it is the wrong seam for a new dependency — when an implementation would drag in a credential and its own availability risk, that's a service-boundary decision (P3), not a new interface implementation (P10).",
+      "severity": "warning",
+      "sortOrder": 10
+    },
+    {
+      "ruleId": "P11",
+      "title": "Anti-corruption at the edge",
+      "content": "External dialects (from different vendors, providers, or upstream systems) are normalized into one internal model at the boundary, exactly once — nothing downstream knows there was more than one dialect. The same pattern applies uniformly to payment providers, mail providers, SMS providers, map providers, and telemetry schemas: one internal abstraction, one adapter per vendor, no vendor-specific type crossing the boundary. Adding a new external source should cost one mapping file, not a change scattered through consuming code.",
+      "severity": "warning",
+      "sortOrder": 11
+    },
+    {
+      "ruleId": "P12",
+      "title": "Tag-driven CI/CD with change detection and ordered deploy",
+      "content": "Deployment is triggered by a version tag push, with a pipeline that detects which services actually changed (path filters into a build matrix), builds only those, and deploys in dependency order (data, then auth, then domain services, then jobs, then frontends). PR environments are provisioned and torn down by workflow. One-shot jobs run as ephemeral machines that run and exit, not as long-lived apps. A service whose deployment target doesn't exist yet is always selected regardless of what the diff says, so a cold environment can come up from a single tag with no manual bootstrap step. Deploy gates accept success-or-skipped from upstream jobs, so an unchanged service in the middle of the dependency chain doesn't block everything behind it.",
+      "severity": "warning",
+      "sortOrder": 12
+    },
+    {
+      "ruleId": "P13",
+      "title": "Test at the layer that has the logic",
+      "content": "Unit tests (one project per service) cover parsers, scoring, prompt builders, validators and orchestrator flow; integration tests cover persistence round-trips and migration application against a real or in-memory provider; end-to-end tests cover cross-app user journeys. A green end-to-end run is only evidence if the suite is verified (assertions that actually assert something, not placeholders) and wired into CI — neither is optional, and a large test count or folder structure proves neither on its own; only reading the test bodies does.",
+      "severity": "warning",
+      "sortOrder": 13
+    },
+    {
+      "ruleId": "P14",
+      "title": "Documentation lives in the repository and records reasoning, not just steps",
+      "content": "Decision records live next to the code and explain why, not just what: why the project exists, what already exists that was considered, what was deliberately rejected and on what grounds (ideally with numbers), and anti-goals stated up front rather than discovered by omission. A document that says 'we considered X and rejected it because Y' is worth more than a document that lists commands. Corollary: a stale README describing a system that no longer exists is a review finding, not a low-priority cleanup — it is worse than no README at all.",
+      "severity": "warning",
+      "sortOrder": 14
+    },
+    {
+      "ruleId": "P15",
+      "title": "Observability is a build-time decision, not an afterthought",
+      "content": "Traces, metrics and logs are exported via OTLP to a configured endpoint from the moment a service is scaffolded, not added later when something breaks; a cloud-specific exporter (e.g. Azure Monitor) is added alongside OTLP when its configuration is present, and health-check requests are filtered out of traces so probe noise doesn't dominate. This applies even to a service whose whole purpose is observability — self-instrumentation is not exempt from needing itself.",
+      "severity": "warning",
+      "sortOrder": 15
+    }
+  ]
+}
