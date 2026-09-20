@@ -1,0 +1,43 @@
+name: 'context-pin drift check'
+description: >-
+  Fails the workflow if the locked rule set content hash no longer matches
+  what context-pin currently serves for this repository and channel.
+author: 'konradcinkusz'
+
+branding:
+  icon: 'link'
+  color: 'blue'
+
+inputs:
+  context-pin-url:
+    description: 'Base URL of the context-pin service, e.g. https://context-pin.example.com'
+    required: true
+  owner:
+    description: 'Repo owner as pinned in context-pin. Defaults to the current repository owner.'
+    required: false
+    default: ''
+  repo:
+    description: 'Repo name as pinned in context-pin. Defaults to the current repository name.'
+    required: false
+    default: ''
+  channel:
+    description: 'Channel to check against.'
+    required: false
+    default: 'stable'
+  lock-file:
+    description: 'Path to the lock file committed by scripts/aurelius-sync.sh.'
+    required: false
+    default: '.aurelius/rules.lock.json'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Check for drift against context-pin
+      shell: bash
+      run: bash "${{ github.action_path }}/check-drift.sh"
+      env:
+        CONTEXT_PIN_URL: ${{ inputs.context-pin-url }}
+        OWNER: ${{ inputs.owner }}
+        REPO: ${{ inputs.repo }}
+        CHANNEL: ${{ inputs.channel }}
+        LOCK_FILE: ${{ inputs.lock-file }}

@@ -97,3 +97,159 @@ jobs:
             exit 1
           fi
           echo "Seed smoke test passed: 15 rules published and retrievable."
+
+  # Proves the actual point of this repository end to end: a consumer syncs a
+  # lock file once (scripts/aurelius-sync.sh), this repo's own GitHub Action
+  # (action.yml, invoked via `uses: ./` — the exact mechanism a consuming repo
+  # uses) reports no drift against it, a republish is then deliberately
+  # introduced, the same Action is shown to fail, and re-syncing clears it.
+  # A separate job because it needs its own Postgres service container and
+  # its own running instance of the service, independent of build-and-test.
+  drift-demo:
+    name: Drift detection demo (self-test)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: build-and-test
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: contextpin
+          POSTGRES_USER: contextpin
+          POSTGRES_PASSWORD: contextpin
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U contextpin"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      ConnectionStrings__contextpindb: "Host=localhost;Port=5432;Database=contextpin;Username=contextpin;Password=contextpin"
+      AdminApiKey: "ci-test-admin-key"
+      ASPNETCORE_URLS: "http://localhost:5080"
+      CONTEXT_PIN_URL: "http://localhost:5080"
+      DEMO_OWNER: "konradcinkusz"
+      DEMO_REPO: "context-pin"
+      DEMO_CHANNEL: "e2e-demo"
+      DEMO_LOCK_FILE: ".aurelius-demo/rules.lock.json"
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Publish the service
+        run: dotnet publish src/ContextPin.Service/ContextPin.Service.csproj --configuration Release --output /tmp/context-pin-publish
+
+      - name: Start the service
+        run: |
+          set -euo pipefail
+          nohup dotnet /tmp/context-pin-publish/ContextPin.Service.dll > /tmp/service.log 2>&1 &
+          echo $! > /tmp/service.pid
+          for _ in $(seq 1 30); do
+            if curl -sf http://localhost:5080/health >/dev/null; then
+              echo "Service is healthy."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Service did not become healthy in time."
+          cat /tmp/service.log
+          exit 1
+
+      - name: Publish and pin rule set v1
+        run: |
+          set -euo pipefail
+          curl -sSf -X POST "${CONTEXT_PIN_URL}/api/rulesets" \
+            -H "Content-Type: application/json" -H "X-Admin-Key: ${AdminApiKey}" \
+            -d '{"version":"e2e-demo-1","status":"released","rules":[{"ruleId":"DEMO","title":"Demo rule","content":"Original content","severity":"info","sortOrder":1}]}'
+          curl -sSf -X POST "${CONTEXT_PIN_URL}/api/repos/${DEMO_OWNER}/${DEMO_REPO}/pin" \
+            -H "Content-Type: application/json" -H "X-Admin-Key: ${AdminApiKey}" \
+            -d "{\"channel\":\"${DEMO_CHANNEL}\",\"version\":\"e2e-demo-1\"}"
+
+      - name: Sync the lock file
+        run: scripts/aurelius-sync.sh "${DEMO_OWNER}" "${DEMO_REPO}" "${DEMO_CHANNEL}" "${DEMO_LOCK_FILE}"
+
+      - name: Confirm the lock file is self-contained (no network call)
+        run: |
+          set -euo pipefail
+          # This step makes no curl call at all — reading the committed lock
+          # file for its version/rule count needs nothing but the file
+          # scripts/aurelius-sync.sh already wrote to disk. That's the actual
+          # "works offline" property: not a claim, just nothing here to fail
+          # if the network were down.
+          echo "Locked version: $(jq -r '.version' "${DEMO_LOCK_FILE}")"
+          echo "Locked rule count: $(jq '.rules | length' "${DEMO_LOCK_FILE}")"
+
+      - name: 'Drift check: expect none'
+        uses: ./
+        with:
+          context-pin-url: ${{ env.CONTEXT_PIN_URL }}
+          owner: ${{ env.DEMO_OWNER }}
+          repo: ${{ env.DEMO_REPO }}
+          channel: ${{ env.DEMO_CHANNEL }}
+          lock-file: ${{ env.DEMO_LOCK_FILE }}
+
+      - name: Publish and pin rule set v2 (mutated)
+        run: |
+          set -euo pipefail
+          curl -sSf -X POST "${CONTEXT_PIN_URL}/api/rulesets" \
+            -H "Content-Type: application/json" -H "X-Admin-Key: ${AdminApiKey}" \
+            -d '{"version":"e2e-demo-2","status":"released","rules":[{"ruleId":"DEMO","title":"Demo rule","content":"Mutated content — this must be reported as drift","severity":"info","sortOrder":1}]}'
+          curl -sSf -X POST "${CONTEXT_PIN_URL}/api/repos/${DEMO_OWNER}/${DEMO_REPO}/pin" \
+            -H "Content-Type: application/json" -H "X-Admin-Key: ${AdminApiKey}" \
+            -d "{\"channel\":\"${DEMO_CHANNEL}\",\"version\":\"e2e-demo-2\"}"
+
+      - name: 'Drift check: expect drift (must fail)'
+        id: drift_check_expect_failure
+        continue-on-error: true
+        uses: ./
+        with:
+          context-pin-url: ${{ env.CONTEXT_PIN_URL }}
+          owner: ${{ env.DEMO_OWNER }}
+          repo: ${{ env.DEMO_REPO }}
+          channel: ${{ env.DEMO_CHANNEL }}
+          lock-file: ${{ env.DEMO_LOCK_FILE }}
+
+      - name: Assert drift was detected
+        run: |
+          set -euo pipefail
+          if [ "${{ steps.drift_check_expect_failure.outcome }}" != "failure" ]; then
+            echo "Expected the drift check to fail after republishing, but it reported: ${{ steps.drift_check_expect_failure.outcome }}"
+            exit 1
+          fi
+          echo "Confirmed: the drift check correctly failed after the rule set was republished."
+
+      - name: Re-sync after the republish
+        run: scripts/aurelius-sync.sh "${DEMO_OWNER}" "${DEMO_REPO}" "${DEMO_CHANNEL}" "${DEMO_LOCK_FILE}"
+
+      - name: 'Drift check: expect none again, after re-sync'
+        uses: ./
+        with:
+          context-pin-url: ${{ env.CONTEXT_PIN_URL }}
+          owner: ${{ env.DEMO_OWNER }}
+          repo: ${{ env.DEMO_REPO }}
+          channel: ${{ env.DEMO_CHANNEL }}
+          lock-file: ${{ env.DEMO_LOCK_FILE }}
+
+      # owner/repo are omitted here on purpose: this job's own repository IS
+      # konradcinkusz/context-pin, so check-drift.sh's fallback to
+      # GITHUB_REPOSITORY should resolve to the same values the explicit
+      # steps above passed directly, with the same "no drift" result.
+      - name: 'Drift check: default owner/repo from GITHUB_REPOSITORY'
+        uses: ./
+        with:
+          context-pin-url: ${{ env.CONTEXT_PIN_URL }}
+          channel: ${{ env.DEMO_CHANNEL }}
+          lock-file: ${{ env.DEMO_LOCK_FILE }}
+
+      - name: Stop the service
+        if: always()
+        run: kill "$(cat /tmp/service.pid)" 2>/dev/null || true
