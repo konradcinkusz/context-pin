@@ -1,0 +1,23 @@
+# Local development only. Matches the credentials in
+# src/ContextPin.Service/appsettings.Development.json, and the Postgres image
+# used by the CI service container in .github/workflows/ci.yml — kept in sync by
+# hand for now (there are only two places).
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: contextpin
+      POSTGRES_USER: contextpin
+      POSTGRES_PASSWORD: contextpin
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contextpin"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - contextpin-postgres:/var/lib/postgresql/data
+
+volumes:
+  contextpin-postgres:

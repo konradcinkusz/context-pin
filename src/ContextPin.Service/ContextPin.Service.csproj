@@ -5,4 +5,18 @@
     <UserSecretsId>c1a1f2f6-1a2b-4e3d-9c7a-2f6b8e0d4a11</UserSecretsId>
   </PropertyGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="8.0.5" />
+    <PackageReference Include="Dapper" Version="2.1.35" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Copied to this project's own output directory so Program.cs can find them
+         at AppContext.BaseDirectory/Migrations at runtime, in a published container
+         as much as in a local build. -->
+    <None Include="Migrations\*.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
