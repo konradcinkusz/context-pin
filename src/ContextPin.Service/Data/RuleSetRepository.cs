@@ -6,13 +6,18 @@ namespace ContextPin.Service.Data;
 
 public interface IRuleSetRepository
 {
-    /// <summary>Creates a new RuleSet with its rules, in one transaction.</summary>
+    /// <summary>
+    /// Creates a new RuleSet with its rules, in one transaction. The content hash
+    /// is computed here from the rules — never accepted as a parameter — so it
+    /// cannot be supplied inconsistently with what the rules actually contain.
+    /// </summary>
     Task<RuleSet> CreateAsync(
         string version,
-        string contentHash,
         string status,
         IReadOnlyList<NewRule> rules,
         CancellationToken cancellationToken = default);
+
+    Task<RuleSet?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default);
 
     Task<RuleSet?> GetByVersionAsync(string version, CancellationToken cancellationToken = default);
 
@@ -47,13 +52,13 @@ public sealed class RuleSetRepository(NpgsqlDataSource dataSource) : IRuleSetRep
 
     public async Task<RuleSet> CreateAsync(
         string version,
-        string contentHash,
         string status,
         IReadOnlyList<NewRule> rules,
         CancellationToken cancellationToken = default)
     {
         var ruleSetId = Guid.NewGuid();
         var createdAt = DateTime.UtcNow;
+        var contentHash = RuleSetContentHasher.ComputeContentHash(rules);
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -91,6 +96,15 @@ public sealed class RuleSetRepository(NpgsqlDataSource dataSource) : IRuleSetRep
         await transaction.CommitAsync(cancellationToken);
 
         return new RuleSet(ruleSetId, version, contentHash, status, createdAt);
+    }
+
+    public async Task<RuleSet?> GetByIdAsync(Guid id, CancellationToken cancellationToken = default)
+    {
+        await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
+        return await connection.QuerySingleOrDefaultAsync<RuleSet>(new CommandDefinition(
+            $"SELECT {SelectRuleSetColumns} FROM rule_sets WHERE id = @Id;",
+            new { Id = id },
+            cancellationToken: cancellationToken));
     }
 
     public async Task<RuleSet?> GetByVersionAsync(string version, CancellationToken cancellationToken = default)
