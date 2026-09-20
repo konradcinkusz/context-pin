@@ -11,4 +11,5 @@ public sealed record RepoPin(
     string Repo,
     string Channel,
     Guid RuleSetId,
-    DateTimeOffset UpdatedAt);
+    // DateTime (UTC), not DateTimeOffset — see RuleSet.CreatedAt for why.
+    DateTime UpdatedAt);

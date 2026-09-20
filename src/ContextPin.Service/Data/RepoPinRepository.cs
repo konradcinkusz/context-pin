@@ -41,7 +41,7 @@ public sealed class RepoPinRepository(NpgsqlDataSource dataSource) : IRepoPinRep
                 Repo = repo,
                 Channel = channel,
                 RuleSetId = ruleSetId,
-                UpdatedAt = DateTimeOffset.UtcNow,
+                UpdatedAt = DateTime.UtcNow,
             },
             cancellationToken: cancellationToken));
     }

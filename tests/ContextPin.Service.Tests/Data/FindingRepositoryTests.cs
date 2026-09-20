@@ -14,7 +14,7 @@ public class FindingRepositoryTests(PostgresFixture fixture)
         var owner = $"owner-{Guid.NewGuid():N}";
         var finding = new Finding(
             Guid.NewGuid(), owner, "context-pin", "abc123def", "P4", "1.0.0",
-            "warning", "Schema is EnsureCreated, not migrated.", DateTimeOffset.UtcNow);
+            "warning", "Schema is EnsureCreated, not migrated.", DateTime.UtcNow);
 
         await _findings.AddAsync(finding);
 
@@ -31,9 +31,9 @@ public class FindingRepositoryTests(PostgresFixture fixture)
     {
         var owner = $"owner-{Guid.NewGuid():N}";
         await _findings.AddAsync(new Finding(
-            Guid.NewGuid(), owner, "repo-a", "sha1", "P1", "1.0.0", "info", "in repo-a", DateTimeOffset.UtcNow));
+            Guid.NewGuid(), owner, "repo-a", "sha1", "P1", "1.0.0", "info", "in repo-a", DateTime.UtcNow));
         await _findings.AddAsync(new Finding(
-            Guid.NewGuid(), owner, "repo-b", "sha2", "P2", "1.0.0", "info", "in repo-b", DateTimeOffset.UtcNow));
+            Guid.NewGuid(), owner, "repo-b", "sha2", "P2", "1.0.0", "info", "in repo-b", DateTime.UtcNow));
 
         var forRepoA = await _findings.GetByOwnerAndRepoAsync(owner, "repo-a");
 

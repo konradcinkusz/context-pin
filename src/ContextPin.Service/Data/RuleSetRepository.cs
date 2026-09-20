@@ -53,7 +53,7 @@ public sealed class RuleSetRepository(NpgsqlDataSource dataSource) : IRuleSetRep
         CancellationToken cancellationToken = default)
     {
         var ruleSetId = Guid.NewGuid();
-        var createdAt = DateTimeOffset.UtcNow;
+        var createdAt = DateTime.UtcNow;
 
         await using var connection = await dataSource.OpenConnectionAsync(cancellationToken);
         await using var transaction = await connection.BeginTransactionAsync(cancellationToken);

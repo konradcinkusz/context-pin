@@ -11,4 +11,11 @@ public sealed record RuleSet(
     string Version,
     string ContentHash,
     string Status,
-    DateTimeOffset CreatedAt);
+    // DateTime (UTC), not DateTimeOffset: Postgres's timestamptz has no per-value
+    // offset to preserve — it is always UTC internally — and Npgsql reads it back
+    // as DateTime with Kind=Utc. Dapper's constructor-based materialization for
+    // records requires the parameter type to match what the reader reports
+    // exactly; a DateTimeOffset parameter here throws
+    // "no constructor matching (..., DateTime createdat)" at read time rather than
+    // converting. Confirmed by CI, not assumed.
+    DateTime CreatedAt);

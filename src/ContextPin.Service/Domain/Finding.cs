@@ -13,4 +13,5 @@ public sealed record Finding(
     string RuleSetVersion,
     string Severity,
     string Message,
-    DateTimeOffset ReportedAt);
+    // DateTime (UTC), not DateTimeOffset — see RuleSet.CreatedAt for why.
+    DateTime ReportedAt);
