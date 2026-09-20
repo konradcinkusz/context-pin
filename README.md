@@ -34,7 +34,7 @@ already exists elsewhere in this author's public repositories — see
 | Domain model (rule sets, rules, repo pins, findings) + migrations | Built |
 | Manifest API (`GET /api/repos/{owner}/{repo}/manifest`) with ETag/content-hash versioning | Built |
 | Import of a first rule set (ported from `architecture-standards`) | Built |
-| `scripts/aurelius-sync.sh` + a drift-detection GitHub Action | Not yet |
+| `scripts/aurelius-sync.sh` + a drift-detection GitHub Action (`action.yml`) | Built |
 | MCP server, hosted governance portal, per-repo billing, self-hosted mode | Out of scope for now — see [Non-goals, for now](#non-goals-for-now) |
 
 ## Running it locally
@@ -59,6 +59,48 @@ service's own `POST /api/rulesets`, not a direct database write. Safe to
 re-run: a version that already exists is treated as success. `ADMIN_API_KEY`
 must match the target service's `AdminApiKey` — the local-dev value above
 matches `appsettings.Development.json`.
+
+## Syncing a repo and detecting drift
+
+A consuming repository does two things, once each:
+
+1. **Sync a lock file**, once, whenever it wants to pick up a version:
+
+   ```bash
+   CONTEXT_PIN_URL=https://<your-context-pin-host> \
+     scripts/aurelius-sync.sh <owner> <repo> [channel] [lock-file]
+   ```
+
+   Writes `.aurelius/rules.lock.json` (default path) — the owner, repo, channel,
+   version, content hash, sync timestamp, and the rules themselves. Commit it.
+   Nothing that reads this file afterward needs a network call.
+
+2. **Check for drift in CI**, on every push, using this repository's own
+   GitHub Action:
+
+   ```yaml
+   - uses: konradcinkusz/context-pin@main
+     with:
+       context-pin-url: https://<your-context-pin-host>
+       # owner/repo default to the repository the workflow runs in
+       channel: stable
+       # lock-file defaults to .aurelius/rules.lock.json
+   ```
+
+   Fails the job if the locked content hash no longer matches what
+   context-pin currently serves for that `(owner, repo, channel)` — using
+   `ETag`/`If-None-Match`, so an unchanged manifest costs the server a `304`
+   with no body. A failure means: someone published a new version and this
+   repo hasn't picked it up yet — re-run step 1 and commit the result.
+
+The two are deliberately separate: syncing is what makes a build
+deterministic and network-free; checking for drift is the one place that's
+allowed to depend on the network, because staleness is exactly what it exists
+to detect. `.github/workflows/ci.yml`'s `drift-demo` job runs both against a
+disposable instance of this service on every push, including a step that
+deliberately republishes a mutated rule set and asserts the Action then
+fails, before re-syncing and confirming it passes again — the actual
+mechanism, exercised end-to-end, not just each half in isolation.
 
 ## Data
 
