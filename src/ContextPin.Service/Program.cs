@@ -1,4 +1,5 @@
 using ContextPin.Service.Data;
+using ContextPin.Service.Endpoints;
 using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,14 @@ app.MapHealthChecks("/health").AllowAnonymous();
 
 app.MapGet("/", () => Results.Ok(new { service = "context-pin", status = "ok" }))
     .AllowAnonymous();
+
+// AdminApiKey (RequireAdminKey, on the write endpoints below) is deliberately
+// NOT required at startup the way the connection string is: the read endpoints
+// (manifest, ruleset lookup, findings list) work fine without it, and failing
+// the whole service over a key that only three endpoints need would take down
+// availability those reads don't depend on. Each write endpoint fails closed on
+// its own, per request, if the key is unset — see RequireAdminKey.
+app.MapApiEndpoints();
 
 app.Run();
 

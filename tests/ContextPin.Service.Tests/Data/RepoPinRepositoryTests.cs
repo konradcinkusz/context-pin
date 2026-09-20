@@ -13,7 +13,7 @@ public class RepoPinRepositoryTests(PostgresFixture fixture)
     [Fact]
     public async Task UpsertAsync_then_GetAsync_round_trips_the_pin()
     {
-        var ruleSet = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "hash", "released", []);
+        var ruleSet = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "released", []);
         var owner = UniqueOwner();
 
         await _pins.UpsertAsync(owner, "context-pin", "stable", ruleSet.Id);
@@ -29,8 +29,8 @@ public class RepoPinRepositoryTests(PostgresFixture fixture)
     [Fact]
     public async Task UpsertAsync_moves_an_existing_pin_rather_than_duplicating_it()
     {
-        var first = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "hash-1", "released", []);
-        var second = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "hash-2", "released", []);
+        var first = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "released", []);
+        var second = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "released", []);
         var owner = UniqueOwner();
 
         await _pins.UpsertAsync(owner, "context-pin", "stable", first.Id);
@@ -45,8 +45,8 @@ public class RepoPinRepositoryTests(PostgresFixture fixture)
     [Fact]
     public async Task Channels_for_the_same_repo_are_independent()
     {
-        var stable = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "hash-stable", "released", []);
-        var canary = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "hash-canary", "released", []);
+        var stable = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "released", []);
+        var canary = await _ruleSets.CreateAsync($"test-{Guid.NewGuid():N}", "released", []);
         var owner = UniqueOwner();
 
         await _pins.UpsertAsync(owner, "context-pin", "stable", stable.Id);

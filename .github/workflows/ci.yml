@@ -22,6 +22,10 @@ env:
   # fixtures that talk to Postgres directly (bypassing the host) read.
   ConnectionStrings__contextpindb: "Host=localhost;Port=5432;Database=contextpin;Username=contextpin;Password=contextpin"
   CONTEXTPIN_TEST_CONNECTION_STRING: "Host=localhost;Port=5432;Database=contextpin;Username=contextpin;Password=contextpin"
+  # A CI-only value, unrelated to any real deployment's key. Lets the write-endpoint
+  # tests exercise the happy path (correct key) as well as the two failure paths
+  # (missing key, wrong key).
+  AdminApiKey: "ci-test-admin-key"
 
 jobs:
   build-and-test:
