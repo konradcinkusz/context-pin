@@ -1,0 +1,58 @@
+name: deploy-pages
+
+# Publishes the Jekyll site to GitHub Pages. Per _config.yml, there is no
+# separate landing page: Jekyll renders README.md as the site's index, so
+# this builds straight from the repo root rather than a docs/ subfolder.
+#
+# Requires a one-time repository setting: Settings → Pages → Build and deployment →
+# Source: "GitHub Actions". Without it, configure-pages fails with a 404 and there is
+# nothing in the workflow to fix.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - '_config.yml'
+      - '.github/workflows/deploy-pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Never cancel a running deployment: a half-published site is worse than a late one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the Jekyll site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/configure-pages@v6
+
+      - uses: actions/jekyll-build-pages@v1
+        with:
+          source: ./
+          destination: ./_site
+
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
