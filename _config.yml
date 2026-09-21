@@ -9,3 +9,16 @@ description: >-
   A versioned rules manifest for coding agents: publish a set of standards
   once, pin each consuming repository to a version and a channel, serve it
   over HTTP with a content hash, and let CI detect drift.
+
+# Everything here is application source, not part of the published site;
+# without this, Jekyll would copy it into _site verbatim alongside the
+# rendered README.
+exclude:
+  - src/
+  - tests/
+  - scripts/
+  - seed/
+  - docker-compose.yml
+  - Directory.Build.props
+  - check-drift.sh
+  - action.yml
